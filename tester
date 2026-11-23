@@ -1,0 +1,35 @@
+#!/bin/bash
+# Build, replay the provided session, and diff against the expected output.
+
+make server rsh || exit 1
+
+# Fresh FIFOs (remove old ones in case they're left over)
+rm -f serverFIFO user1 user2
+mkfifo serverFIFO user1 user2
+
+# 1. Start the server in the background, saving its output
+./server > my_server.out 2>&1 &
+SERVER=$!
+sleep 0.5
+
+# 2. Start both clients, feeding them the test input files.
+#    The sleeps give the listener threads time to start, and keep stdin
+#    open long enough for all messages to be delivered.
+./rsh user1 > my_user1.out 2>/dev/null < <(sleep 0.5; cat test/test_user1.in; sleep 3) &
+C1=$!
+./rsh user2 > my_user2.out 2>/dev/null < <(sleep 0.5; cat test/test_user2.in; sleep 3) &
+C2=$!
+
+# 3. Wait for the messages to go through, then stop everything with Ctrl-C
+#    (SIGINT), which prints "Exiting...." and flushes the output.
+sleep 2
+kill -INT $C1 $C2 $SERVER
+sleep 0.5
+kill -9 $C1 $C2 $SERVER 2>/dev/null
+
+# 4. Compare against the expected output
+diff my_server.out test/server.out     && echo "server: PASS"
+diff my_user1.out  test/test_user1.out && echo "user1:  PASS"
+diff my_user2.out  test/test_user2.out && echo "user2:  PASS"
+
+rm -f serverFIFO user1 user2

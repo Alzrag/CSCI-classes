@@ -1,4 +1,5 @@
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,11 +32,14 @@ int main() {
 	while (1) {
 		// TODO:
 		// read requests from serverFIFO
+        
+        if (read(server, &req, sizeof(req))!=sizeof(req)){
+            continue;
+        }
 
-
-
-
-
+        req.source[sizeof(req.source) - 1] = '\0';
+		req.target[sizeof(req.target) - 1] = '\0';
+		req.msg[sizeof(req.msg) - 1] = '\0';
 
 		printf("Received a request from %s to send the message %s to %s.\n",req.source,req.msg,req.target);
 
@@ -43,11 +47,17 @@ int main() {
 		// open target FIFO and write the whole message struct to the target FIFO
 		// close target FIFO after writing the message
 
+        fflush(stdout);
+        
+        target = open(req.target, O_WRONLY);
+        if (target == -1){
+            perror("server: could not open target FIFO");
+			continue;
+        }
 
+        write(target, &req, sizeof(req));
 
-
-
-
+        close(target);
 
 	}
 	close(server);
